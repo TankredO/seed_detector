@@ -64,6 +64,7 @@ def _segment_image_approx(
     km.fit(
         pixel_values[np.random.choice(np.arange(pixel_values.shape[0]), n_pixels), :]
     )
+
     labels = km.predict(pixel_values)
     centers = km.cluster_centers_
 
@@ -93,7 +94,7 @@ def get_contours(bin_image: np.ndarray, min_size: float) -> List[np.ndarray]:
     bin_image[-1, :] = False
 
     contours, hierarchy = cv2.findContours(
-        bin_image.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE
+        bin_image.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
     )
     contours = [c[:, -1, [1, 0]] for c in contours]
     contours = [c for c in contours if polygon_area(c[:, [1, 0]]) > min_size]
@@ -110,7 +111,7 @@ def _count_objects_approx(
 
     contours, _ = cv2.findContours(
         skimage.transform.rescale(bin_image, scale).astype(np.uint8),
-        cv2.RETR_TREE,
+        cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_NONE,
     )
     contours = [c[:, -1, [1, 0]] for c in contours]
