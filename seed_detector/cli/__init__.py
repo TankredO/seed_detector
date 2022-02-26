@@ -3,7 +3,7 @@ from cloup import group, version_option, help_option
 from .. import __version__
 
 
-@group('seed_detector', help='A tool for seed detection.')
+@group('seed_detector', help='A tool for seed detection.', no_args_is_help=True)
 @help_option('-h', '--help')
 @version_option(__version__, '-v', '--version')
 def main():
