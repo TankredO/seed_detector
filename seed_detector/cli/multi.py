@@ -220,6 +220,11 @@ def single_wrapped(args):
         the number of CPU cores.
     ''',
 )
+@option(
+    '--adaptive',
+    is_flag=True,
+    help='EXPERIMENTAL: use adaptive segmentation algorithm',
+)
 @help_option('-h', '--help')
 def multi(
     image_dir: Path,
@@ -231,6 +236,7 @@ def multi(
     padding: int,
     rm_bg: bool,
     n_proc: int,
+    adaptive: bool,
 ):
     import sys
     import multiprocessing
@@ -258,6 +264,7 @@ def multi(
             contour_output,
             padding,
             rm_bg,
+            adaptive,
         )
         for f in image_files
     ]

@@ -14,6 +14,7 @@ def run_single(
     contour_output: bool,
     padding: int,
     rm_bg: bool,
+    adaptive: bool,
 ):
     import warnings
     import numpy as np
@@ -60,11 +61,15 @@ def run_single(
             get_contours,
             resample_polygon,
             extract_subimage,
+            segment_image2,
         )
 
         image = skimage.io.imread(image_file)
 
-        bin_image = segment_image_adaptive(image, bg_col=bg_col, scale=None)
+        if adaptive:
+            bin_image = segment_image_adaptive(image, bg_col=bg_col, scale=None)
+        else:
+            bin_image = segment_image2(image, bg_col=bg_col, k=2)
 
         min_size = get_minsize_adaptive2(bin_image)
         area_threshold = 1024  # size of holes that will be filled within objects
@@ -172,6 +177,11 @@ def run_single(
         color.
     ''',
 )
+@option(
+    '--adaptive',
+    is_flag=True,
+    help='EXPERIMENTAL: use adaptive segmentation algorithm',
+)
 # @option(
 #     '-r',
 #     '--refine',
@@ -247,6 +257,7 @@ def single(
     contour_output: bool,
     padding: int,
     rm_bg: bool,
+    adaptive: bool,
 ):
     run_single(
         image_file=image_file,
@@ -257,4 +268,5 @@ def single(
         contour_output=contour_output,
         padding=padding,
         rm_bg=rm_bg,
+        adaptive=adaptive,
     )

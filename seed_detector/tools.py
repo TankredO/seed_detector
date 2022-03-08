@@ -7,6 +7,7 @@ import skimage.measure
 import skimage.morphology
 import skimage.draw
 import skimage.transform
+import skimage.color
 import cv2
 import numpy as np
 
@@ -38,6 +39,45 @@ def segment_image(
     # find cluster closest to background color
     else:
         bg_col = np.array(bg_col)
+        centers = np.uint8(centers)
+        distances = np.sqrt(np.sum((bg_col - centers) ** 2, axis=1))
+
+        bg_labels = np.argsort(distances)[:n_bg_clusters]
+
+    bin_image = np.zeros((image.shape[0], image.shape[1]), dtype=bool)
+    bin_image[(~np.isin(labels, bg_labels)).reshape(bin_image.shape)] = True
+
+    return bin_image
+
+
+def segment_image2(
+    image: np.ndarray,
+    k: int = 3,
+    bg_col: Optional[Iterable[int]] = None,
+    n_bg_clusters: int = 1,
+) -> np.ndarray:
+    # lab color space to ignore "brightness"
+    image = skimage.color.rgb2lab(image)
+
+    pixel_values = image[:, :, [1, 2]].reshape((-1, 2)).astype(np.float32)
+
+    _, labels, (centers) = cv2.kmeans(
+        pixel_values,
+        k,
+        None,
+        (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.1),
+        10,
+        cv2.KMEANS_RANDOM_CENTERS,
+    )
+    labels: np.ndarray = labels.flatten()  # type: ignore
+
+    # assume that the cluster with highest number of members (pixels) is background
+    if bg_col is None:
+        lab, counts = np.unique(labels, return_counts=True)
+        bg_labels = np.argsort(counts)[::-1][:n_bg_clusters]
+    # find cluster closest to background color
+    else:
+        bg_col = skimage.color.rgb2lab(np.array(bg_col))
         centers = np.uint8(centers)
         distances = np.sqrt(np.sum((bg_col - centers) ** 2, axis=1))
 
