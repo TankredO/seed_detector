@@ -10,8 +10,9 @@ def main():
     pass
 
 
-from . import single, gui, multi
+from . import single, gui, multi, server
 
 main.add_command(single.single)
 main.add_command(multi.multi)
 main.add_command(gui.gui)
+main.add_command(server.server)
