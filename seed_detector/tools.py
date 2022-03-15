@@ -10,6 +10,7 @@ import skimage.transform
 import skimage.color
 import cv2
 import numpy as np
+from scipy.linalg import orthogonal_procrustes
 
 from typing import Iterable, Tuple, Optional, List
 
@@ -306,3 +307,64 @@ def extract_subimage(
         sub_image[~mask, :] = 0
 
     return sub_image, mask, bbox
+
+
+def rotate_upright(points, box_type='ellipse'):
+    if box_type == 'box':
+        xy, wh, angle = cv2.minAreaRect(points)
+    elif box_type == 'ellipse':
+        xy, wh, angle = cv2.fitEllipse(points)
+    else:
+        msg = f'Unknown box_type "{box_type}".'
+        raise Exception(msg)
+
+    theta = np.radians(angle)
+    c, s = np.cos(theta), np.sin(theta)
+    R = np.array(((c, -s), (s, c)))
+
+    points_rot = points - points.mean(axis=0)
+    points_rot = points_rot.dot(R)
+    points_rot += points.mean(axis=0)
+
+    return points_rot, angle
+
+
+def align_shapes(a, b):
+    a = np.array(a, dtype=np.double, copy=True)
+    b = np.array(b, dtype=np.double, copy=True)
+
+    a -= np.mean(a, 0)
+    b -= np.mean(b, 0)
+
+    norm1 = np.linalg.norm(a)
+    norm2 = np.linalg.norm(b)
+
+    a /= norm1
+    b /= norm2
+
+    best_rotation, best_scale = orthogonal_procrustes(a, b)
+    best_disparity = np.sum(np.square(a - b.dot(best_rotation.T)))
+    best_i = 0
+    for i in range(1, b.shape[0]):
+        cur_b = np.r_[
+            b[
+                i:,
+            ],
+            b[
+                :i,
+            ],
+        ]
+
+        rot, scale = orthogonal_procrustes(a, cur_b)
+        disparity = np.sum(np.square(a - cur_b.dot(rot.T)))
+        # disparity = np.sum(np.abs(a - cur_b.dot(rot.T)))
+
+        # print(i, disparity, best_disparity)
+
+        if disparity < best_disparity:
+            best_disparity = disparity
+            best_rotation = rot
+            best_scale = scale
+            best_i = i
+
+    return b.dot(best_rotation.T), best_i, best_rotation, best_scale, best_disparity
