@@ -36,19 +36,19 @@ def run_single(
                 try:
                     bg_col = [int(s) for s in background_color.split(',')][:3]
                 except:
-                    sys.stderr.write('ERROR: could not parse background_color.')
+                    sys.stderr.write('ERROR: could not parse background_color.\n')
                     sys.exit(1)
             elif '#' in background_color:
                 try:
                     bg_col = [b for b in bytes.fromhex(background_color[1:])]
                 except:
-                    sys.stderr.write('ERROR: could not parse background_color.')
+                    sys.stderr.write('ERROR: could not parse background_color.\n')
                     sys.exit(1)
             else:
-                sys.stderr.write('ERROR: invalid background_color option.')
+                sys.stderr.write('ERROR: invalid background_color option.\n')
                 sys.exit(1)
             if any([x > 255 or x < 0 for x in bg_col]):
-                sys.stderr.write('ERROR: color values must be in the range 0..255.')
+                sys.stderr.write('ERROR: color values must be in the range 0..255.\n')
                 sys.exit(1)
 
         import skimage.io
@@ -63,6 +63,7 @@ def run_single(
             extract_subimage,
             segment_image2,
         )
+        from ..defaults import DEFAULT_N_POLYGON_VERTICES, DEFAULT_AREA_THRESHOLD
 
         image = skimage.io.imread(image_file)
 
@@ -72,13 +73,17 @@ def run_single(
             bin_image = segment_image2(image, bg_col=bg_col, k=2)
 
         min_size = get_minsize_adaptive2(bin_image)
-        area_threshold = 1024  # size of holes that will be filled within objects
+        area_threshold = (
+            DEFAULT_AREA_THRESHOLD  # size of holes that will be filled within objects
+        )
         bin_image = filter_bin_image(
             bin_image, min_size=min_size, area_threshold=area_threshold
         )
 
         contours = get_contours(bin_image=bin_image, min_size=min_size)
-        n_vertices = 500  # number of vertices to resample contours to
+        n_vertices = (
+            DEFAULT_N_POLYGON_VERTICES  # number of vertices to resample contours to
+        )
         contours = [resample_polygon(c, n_vertices) for c in contours]
 
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -162,7 +167,7 @@ def run_single(
             will be created in the current working directory ({Path(".").resolve()}).
         ''',
         default=None,
-        required=True,
+        required=False,
     ),
 )
 @option(
@@ -237,7 +242,7 @@ def run_single(
         '-p',
         '--padding',
         type=int,
-        default=0,
+        default=5,
         help='Padding around objects for mask and bounding box outputs.',
         show_default=True,
     ),
