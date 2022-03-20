@@ -78,7 +78,7 @@ def single_wrapped(args):
         '-p',
         '--padding',
         type=int,
-        default=0,
+        default=5,
         help='Padding around objects for mask and bounding box outputs.',
         show_default=True,
     ),
@@ -151,7 +151,6 @@ def multi(
     with multiprocessing.Pool(processes=n_proc) as pool:
         list(
             tqdm(
-                pool.imap_unordered(single_wrapped, args_list),
-                total=len(image_files),
+                pool.imap_unordered(single_wrapped, args_list), total=len(image_files),
             )
         )

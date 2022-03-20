@@ -10,10 +10,11 @@ def main():
     pass
 
 
-from . import single, gui, multi, server, align
+from . import single, gui, multi, server, align, measure
 
 main.add_command(single.single)
 main.add_command(multi.multi)
 main.add_command(gui.gui)
 main.add_command(server.server)
 main.add_command(align.align)
+main.add_command(measure.measure)

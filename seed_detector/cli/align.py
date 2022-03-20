@@ -14,10 +14,7 @@ from cloup import (
 
 
 def run_single(
-    image_file: Path,
-    mask_file: Path,
-    out_dir: Optional[Path],
-    padding: int,
+    image_file: Path, mask_file: Path, out_dir: Optional[Path], padding: int,
 ):
     image_name = image_file.with_suffix('').name
     if out_dir is None:
@@ -73,12 +70,7 @@ def run_single(
         rots.append(np.arctan2(rotation.T[0, 0], rotation.T[1, 0]) * 180 / np.pi)
         contour_rot = contour.dot(rotation.T)
         contour_rot = np.r_[
-            contour_rot[
-                best_i:,
-            ],
-            contour_rot[
-                :best_i,
-            ],
+            contour_rot[best_i:,], contour_rot[:best_i,],
         ]
         contours_rot.append(contour_rot)
 
@@ -100,8 +92,6 @@ def run_single(
             padding=(padding, padding, padding, padding),
             remove_background=True,
         )
-
-        import matplotlib.pyplot as plt
 
         out_file_image = out_dir_extractions / f'{image_name}_bbox{i}.png'
         cv2.imwrite(str(out_file_image), sub_image_rot * 255)
@@ -155,7 +145,7 @@ def single_wrapped(args):
         ),
         help=f'''
             Output directory. Will be created if it does not exist. By default
-            a directory with the name as "<IMAGE_FILE>_aligned" (but without suffix)
+            a directory with the name "<IMAGE_FILE>_aligned"
             will be created in the current working directory ({Path(".").resolve()}).
         ''',
         default=None,
@@ -175,16 +165,10 @@ def single_wrapped(args):
 )
 @help_option('-h', '--help')
 def single(
-    image_file: Path,
-    mask_file: Path,
-    out_dir: Optional[Path],
-    padding: int,
+    image_file: Path, mask_file: Path, out_dir: Optional[Path], padding: int,
 ):
     run_single(
-        image_file=image_file,
-        mask_file=mask_file,
-        out_dir=out_dir,
-        padding=padding,
+        image_file=image_file, mask_file=mask_file, out_dir=out_dir, padding=padding,
     )
 
 
@@ -262,11 +246,7 @@ def single(
 )
 @help_option('-h', '--help')
 def multi(
-    image_dir: Path,
-    mask_dir: Path,
-    out_dir: Optional[Path],
-    padding: int,
-    n_proc: int,
+    image_dir: Path, mask_dir: Path, out_dir: Optional[Path], padding: int, n_proc: int,
 ):
     import numpy as np
     from ..defaults import IMAGE_EXTENSIONS
@@ -353,8 +333,7 @@ def multi(
     with multiprocessing.Pool(processes=n_proc) as pool:
         list(
             tqdm(
-                pool.imap_unordered(single_wrapped, args_list),
-                total=len(image_files),
+                pool.imap_unordered(single_wrapped, args_list), total=len(image_files),
             )
         )
 
