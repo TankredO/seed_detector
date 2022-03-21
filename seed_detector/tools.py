@@ -8,6 +8,7 @@ import skimage.morphology
 import skimage.draw
 import skimage.transform
 import skimage.color
+import sklearn.cluster
 import cv2
 import numpy as np
 from scipy.linalg import orthogonal_procrustes
@@ -309,7 +310,7 @@ def extract_subimage(
     return sub_image, mask, bbox
 
 
-def rotate_upright(points, box_type='ellipse'):
+def rotate_upright(points: np.ndarray, box_type: str = 'ellipse'):
     if box_type == 'box':
         xy, wh, angle = cv2.minAreaRect(points)
     elif box_type == 'ellipse':
@@ -322,14 +323,14 @@ def rotate_upright(points, box_type='ellipse'):
     c, s = np.cos(theta), np.sin(theta)
     R = np.array(((c, -s), (s, c)))
 
-    points_rot = points - points.mean(axis=0)
+    points_rot: np.ndarray = points - points.mean(axis=0)
     points_rot = points_rot.dot(R)
     points_rot += points.mean(axis=0)
 
     return points_rot, angle
 
 
-def align_shapes(a, b):
+def align_shapes(a: np.ndarray, b: np.ndarray):
     a = np.array(a, dtype=np.double, copy=True)
     b = np.array(b, dtype=np.double, copy=True)
 
@@ -368,3 +369,47 @@ def align_shapes(a, b):
             best_i = i
 
     return b.dot(best_rotation.T), best_i, best_rotation, best_scale, best_disparity
+
+
+def primary_colors(
+    image: np.ndarray, mask: Optional[np.ndarray] = None, n_colors: int = 5
+):
+    km = sklearn.cluster.KMeans(n_clusters=n_colors)
+
+    if not mask is None:
+        pixel_values = image[mask != 0].reshape((-1, image.shape[2]))
+    else:
+        pixel_values = image.reshape((-1, image.shape[2]))
+
+    cl: np.ndarray = km.fit_predict(pixel_values)
+    _, counts = np.unique(cl, return_counts=True)
+    colors: np.ndarray = km.cluster_centers_
+    colors = colors.clip(min=0.0)
+
+    order = np.flip(np.argsort(counts))
+
+    colors = colors[order]
+    counts = counts[order].astype(int)
+
+    return colors, counts
+
+
+def resize_image(
+    image: np.ndarray,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    order: int = 1,
+):
+    h, w = image.shape[:2]
+
+    if width is None and height is None:
+        return image
+
+    if not height is None:
+        ratio = height / h
+        width = int(w * ratio)
+    elif not width is None:
+        ratio = width / w
+        height = int(h * ratio)
+
+    return skimage.transform.resize(image, (height, width), order=order)

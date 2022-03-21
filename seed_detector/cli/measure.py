@@ -13,7 +13,7 @@ from cloup import (
 )
 
 
-def run_single(image_file: Path, mask_file: Path):
+def run_single(image_file: Path, mask_file: Path, n_colors: int = 5):
     image_name = image_file.with_suffix('').name
 
     import numpy as np
@@ -22,6 +22,8 @@ def run_single(image_file: Path, mask_file: Path):
     import skimage.transform
     import skimage.measure
     import skimage.morphology
+    import skimage.color
+    import skimage.feature
     import pyefd
     from ..defaults import DEFAULT_N_POLYGON_VERTICES
     from ..tools import (
@@ -32,6 +34,8 @@ def run_single(image_file: Path, mask_file: Path):
         extract_subimage,
         get_bbox,
         polygon_area,
+        primary_colors,
+        resize_image,
     )
 
     # read in image and mask
@@ -44,11 +48,12 @@ def run_single(image_file: Path, mask_file: Path):
     contour = get_contours(mask, min_size=min_size)[0]
     contour = resample_polygon(contour, n_points=n_vertices)
 
+    # == shape
     props = skimage.measure.regionprops(mask)[0]
 
     bbox = props.bbox
-    length = bbox[3] - bbox[1]
-    width = bbox[2] - bbox[0]
+    length = bbox[2] - bbox[0]
+    width = bbox[3] - bbox[1]
     aspect_ratio = length / width
 
     area = props.area
@@ -60,11 +65,109 @@ def run_single(image_file: Path, mask_file: Path):
 
     diaspore_surface_structure = chull_perimeter / perimeter
 
-    # TODO:
+    # == dominant colors
+    def build_pc_dict(
+        colors,
+        counts,
+        prefix,
+        col_comp_names,
+    ):
+        if np.issubdtype(counts[0], int):
+            suffix = 'count'
+        else:
+            suffix = 'frac'
+
+        pc_dict = {}
+        for i, col in enumerate(colors):
+            for val, c in zip(col, col_comp_names):
+                pc_dict[f'{prefix}_{i}_{c}'] = val
+        for i, count in enumerate(counts):
+            pc_dict[f'{prefix}_{i}_{suffix}'] = count
+
+        return pc_dict
+
     # dominant color (RGB)
+    colors_rgb, counts_rgb = primary_colors(image, mask, n_colors)
+    colors_rgb = np.round(colors_rgb, 0).astype(np.uint8)
+    frac_rgb = counts_rgb / counts_rgb.sum()
+    colors_rgb_dict = build_pc_dict(colors_rgb, frac_rgb, 'rgb', ('r', 'g', 'b'))
+
     # dominant color (HSV)
+    image_hsv = skimage.color.rgb2hsv(image)
+    colors_hsv, counts_hsv = primary_colors(image_hsv, mask, n_colors)
+    frac_hsv = counts_hsv / counts_hsv.sum()
+    colors_hsv_dict = build_pc_dict(colors_hsv, frac_hsv, 'hsv', ('h', 's', 'v'))
+
     # dominant color (Lab)
-    # Texture
+    image_lab = skimage.color.rgb2lab(image)
+    colors_lab, counts_lab = primary_colors(image_lab, mask, n_colors)
+    frac_lab = counts_lab / counts_lab.sum()
+    colors_lab_dict = build_pc_dict(colors_lab, frac_lab, 'lab', ('l', 'a', 'b'))
+
+    # == Texture
+    def build_texture_dict(
+        props,
+        distances,
+        angles,
+        prefix,
+    ):
+        texture_dict = {}
+        for p_name, p in props.items():
+            for i, d in enumerate(distances):
+                for j, a in enumerate(angles):
+                    texture_dict[f'{prefix}_{p_name}_d{d}_a{a}'] = p[i][j]
+
+        return texture_dict
+
+    symmetric = True
+    normed = True
+    distances = (3, 5)
+    angles = (0, 45, 90)
+    p_names = (
+        'contrast',
+        'dissimilarity',
+        'homogeneity',
+        'ASM',
+        'energy',
+        'correlation',
+    )
+
+    mask_resized = resize_image(mask, height=128, order=0)
+
+    # texture gray image
+    image_gray = skimage.color.rgb2gray(image)
+    image_gray = (resize_image(image_gray, height=128) * 255).astype(np.uint8)
+    image_gray[mask_resized == 0] = 0
+
+    glcm_gray = skimage.feature.graycomatrix(
+        image_gray,
+        distances=distances,
+        angles=angles,
+        symmetric=symmetric,
+        normed=normed,
+    )
+    glcm_gray_props = {
+        p_name: skimage.feature.graycoprops(glcm_gray, prop=p_name)
+        for p_name in p_names
+    }
+    glcm_gray_dict = build_texture_dict(glcm_gray_props, distances, angles, 'gray')
+
+    # texture L* (Lab color space)
+    image_l = skimage.color.rgb2lab(image)[:, :, 0]
+    image_l = np.round(resize_image(image_l, height=128)).astype(np.uint8)
+    image_l[mask_resized == 0] = 0
+
+    glcm_l = skimage.feature.graycomatrix(
+        image_l,
+        distances=distances,
+        angles=angles,
+        symmetric=symmetric,
+        normed=normed,
+    )
+    glcm_l_props = {
+        p_name: skimage.feature.graycoprops(glcm_l, prop=p_name) for p_name in p_names
+    }
+    glcm_l_dict = build_texture_dict(glcm_l_props, distances, angles, 'L')
 
     measurements = pd.DataFrame(
         dict(
@@ -77,6 +180,11 @@ def run_single(image_file: Path, mask_file: Path):
             area=area,
             perimeter=perimeter,
             diaspore_surface_structure=diaspore_surface_structure,
+            **colors_rgb_dict,
+            **colors_hsv_dict,
+            **colors_lab_dict,
+            **glcm_gray_dict,
+            **glcm_l_dict,
         ),
         index=[image_name],
     )
@@ -138,10 +246,13 @@ def single_wrapped(args):
 def single(image_file: Path, mask_file: Path, out_file: Optional[Path]):
     image_name = image_file.with_suffix('').name
     if out_file is None:
-        out_dir = Path(f'{image_name}_aligned')
+        out_file = Path(f'{image_name}_measurements.csv')
 
-    measurements = run_single(image_file=image_file, mask_file=mask_file,)
-    print(measurements)
+    measurements = run_single(
+        image_file=image_file,
+        mask_file=mask_file,
+    )
+    measurements.to_csv(out_file, index=False)
 
 
 @command('multi', help='Calculate measurements for multiple image-mask pairs.')
@@ -206,7 +317,11 @@ def single(image_file: Path, mask_file: Path, out_file: Optional[Path]):
 )
 @help_option('-h', '--help')
 def multi(
-    image_dir: Path, mask_dir: Path, out_dir: Optional[Path], padding: int, n_proc: int,
+    image_dir: Path,
+    mask_dir: Path,
+    out_dir: Optional[Path],
+    padding: int,
+    n_proc: int,
 ):
     # import numpy as np
     # from ..defaults import IMAGE_EXTENSIONS
