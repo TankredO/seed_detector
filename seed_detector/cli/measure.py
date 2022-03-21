@@ -13,7 +13,17 @@ from cloup import (
 )
 
 
-def run_single(image_file: Path, mask_file: Path, n_colors: int = 5):
+def run_single(
+    image_file: Path,
+    mask_file: Path,
+    n_colors: int = 5,
+    symmetric: bool = True,
+    normed: bool = True,
+    distances: Iterable[int] = (3, 5),
+    angles: Iterable[int] = (0, 45, 90),
+    resize_height: Optional[int] = None,
+    resize_width: Optional[int] = None,
+):
     image_name = image_file.with_suffix('').name
 
     import numpy as np
@@ -24,16 +34,10 @@ def run_single(image_file: Path, mask_file: Path, n_colors: int = 5):
     import skimage.morphology
     import skimage.color
     import skimage.feature
-    import pyefd
     from ..defaults import DEFAULT_N_POLYGON_VERTICES
     from ..tools import (
         get_contours,
         resample_polygon,
-        rotate_upright,
-        align_shapes,
-        extract_subimage,
-        get_bbox,
-        polygon_area,
         primary_colors,
         resize_image,
     )
@@ -119,10 +123,6 @@ def run_single(image_file: Path, mask_file: Path, n_colors: int = 5):
 
         return texture_dict
 
-    symmetric = True
-    normed = True
-    distances = (3, 5)
-    angles = (0, 45, 90)
     p_names = (
         'contrast',
         'dissimilarity',
@@ -132,11 +132,13 @@ def run_single(image_file: Path, mask_file: Path, n_colors: int = 5):
         'correlation',
     )
 
-    mask_resized = resize_image(mask, height=128, order=0)
+    mask_resized = resize_image(mask, height=resize_height, width=resize_width, order=0)
 
     # texture gray image
     image_gray = skimage.color.rgb2gray(image)
-    image_gray = (resize_image(image_gray, height=128) * 255).astype(np.uint8)
+    image_gray = (
+        resize_image(image_gray, height=resize_height, width=resize_width) * 255
+    ).astype(np.uint8)
     image_gray[mask_resized == 0] = 0
 
     glcm_gray = skimage.feature.graycomatrix(
@@ -154,7 +156,9 @@ def run_single(image_file: Path, mask_file: Path, n_colors: int = 5):
 
     # texture L* (Lab color space)
     image_l = skimage.color.rgb2lab(image)[:, :, 0]
-    image_l = np.round(resize_image(image_l, height=128)).astype(np.uint8)
+    image_l = np.round(
+        resize_image(image_l, height=resize_height, width=resize_width)
+    ).astype(np.uint8)
     image_l[mask_resized == 0] = 0
 
     glcm_l = skimage.feature.graycomatrix(
@@ -193,7 +197,7 @@ def run_single(image_file: Path, mask_file: Path, n_colors: int = 5):
 
 
 def single_wrapped(args):
-    run_single(*args)
+    return run_single(*args)
 
 
 @command('single', help='Calculate measurements for a single image-mask pair.')
@@ -242,8 +246,67 @@ def single_wrapped(args):
         required=False,
     ),
 )
+@option_group(
+    'Color options',
+    option(
+        '-n',
+        '--n_colors',
+        type=int,
+        default=5,
+        help='Number of dominant colors to ectract.',
+        show_default=True,
+    ),
+)
+@option_group(
+    'Texture options',
+    option(
+        '-d',
+        '--distances',
+        multiple=True,
+        default=(5, 7),
+        help='Distances for gray level co-occurrence matrix calculation.',
+        show_default=True,
+    ),
+    option(
+        '-a',
+        '--angles',
+        multiple=True,
+        default=(0, 45, 90),
+        help='Angles for gray level co-occurrence matrix calculation.',
+        show_default=True,
+    ),
+    option(
+        '-w',
+        '--resize_width',
+        type=int,
+        default=None,
+        help='''
+            Resize image and mask before calculating the gray level co-occurence matrix
+            so that the width is -w/--resize_width while preserving aspect ratio.
+        ''',
+    ),
+    option(
+        '-h',
+        '--resize_height',
+        type=int,
+        default=None,
+        help='''
+            Resize image and mask before calculating the gray level co-occurence matrix
+            so that the height is -h/--resize_height while preserving aspect ratio.
+        ''',
+    ),
+)
 @help_option('-h', '--help')
-def single(image_file: Path, mask_file: Path, out_file: Optional[Path]):
+def single(
+    image_file: Path,
+    mask_file: Path,
+    out_file: Optional[Path],
+    n_colors: int,
+    distances: List[int],
+    angles: List[int],
+    resize_width: Optional[int],
+    resize_height: Optional[int],
+):
     image_name = image_file.with_suffix('').name
     if out_file is None:
         out_file = Path(f'{image_name}_measurements.csv')
@@ -251,6 +314,11 @@ def single(image_file: Path, mask_file: Path, out_file: Optional[Path]):
     measurements = run_single(
         image_file=image_file,
         mask_file=mask_file,
+        n_colors=n_colors,
+        distances=distances,
+        angles=angles,
+        resize_width=resize_width,
+        resize_height=resize_height,
     )
     measurements.to_csv(out_file, index=False)
 
@@ -269,7 +337,10 @@ def single(image_file: Path, mask_file: Path, out_file: Optional[Path]):
             resolve_path=True,
             path_type=Path,
         ),
-        help='Input image directory.',
+        help='''
+            Input image directory or align output directory. If image_dir is an align
+            output directory, -m/--mask_dir should be omitted.
+        ''',
         required=True,
     ),
     option(
@@ -283,13 +354,12 @@ def single(image_file: Path, mask_file: Path, out_file: Optional[Path]):
             resolve_path=True,
             path_type=Path,
         ),
-        # TODO:
         help='''
-            Input mask directory or align output directory. Mask files must
-            be PNG files named <IMAGE_NAME>_mask.png; i.e., for an image file
+            Input mask directory. Can be omitted if -i/--image_dir is an align output directory.
+            Mask files must be PNG files named <IMAGE_NAME>_mask.png; i.e., for an image file
             "image_1.jpg" the corresponding mask must be named "image_1_mask.png".
         ''',
-        required=True,
+        required=False,
     ),
     option(
         '-o',
@@ -298,12 +368,63 @@ def single(image_file: Path, mask_file: Path, out_file: Optional[Path]):
             file_okay=False, dir_okay=True, resolve_path=True, path_type=Path
         ),
         help=f'''
-            Output (CSV) file. By default
-            a file with the name "<IMAGE_DIR>_measurements.csv" will be created in
-            the current working directory ({Path(".").resolve()}).
+            Output (CSV) file. By default a file with the name "<IMAGE_DIR>_measurements.csv"
+            will be created in the current working directory ({Path(".").resolve()}).
         ''',
         default=None,
         required=False,
+    ),
+)
+@option_group(
+    'Color options',
+    option(
+        '-n',
+        '--n_colors',
+        type=int,
+        default=5,
+        help='Number of dominant colors to extract.',
+        show_default=True,
+    ),
+)
+@option_group(
+    'Texture options',
+    option(
+        '-d',
+        '--distances',
+        multiple=True,
+        default=(5, 7),
+        help='Distances for gray level co-occurrence matrix calculation.',
+        show_default=True,
+    ),
+    option(
+        '-a',
+        '--angles',
+        multiple=True,
+        default=(0, 45, 90),
+        help='Angles for gray level co-occurrence matrix calculation.',
+        show_default=True,
+    ),
+    option(
+        '-w',
+        '--resize_width',
+        type=int,
+        default=None,
+        help='''
+            Resize images and masks before calculating the gray level co-occurence matrix
+            so that the width is -w/--resize_width while preserving aspect ratio. By default
+            no resizing is applied.
+        ''',
+    ),
+    option(
+        '-h',
+        '--resize_height',
+        type=int,
+        default=None,
+        help='''
+            Resize images and masks before calculating the gray level co-occurence matrix
+            so that the height is -h/--resize_height while preserving aspect ratio. By default
+            no resizing is applied.
+        ''',
     ),
 )
 @option(
@@ -314,28 +435,117 @@ def single(image_file: Path, mask_file: Path, out_file: Optional[Path]):
         Number of parallel processes to run. Should not be set higher than
         the number of CPU cores.
     ''',
+    show_default=True,
 )
 @help_option('-h', '--help')
 def multi(
     image_dir: Path,
-    mask_dir: Path,
-    out_dir: Optional[Path],
-    padding: int,
+    mask_dir: Optional[Path],
+    out_file: Optional[Path],
+    n_colors: int,
+    distances: List[int],
+    angles: List[int],
+    resize_width: Optional[int],
+    resize_height: Optional[int],
     n_proc: int,
 ):
-    # import numpy as np
-    # from ..defaults import IMAGE_EXTENSIONS
+    import numpy as np
+    from ..defaults import IMAGE_EXTENSIONS
 
-    # image_dir_name = image_dir.name
-    # if out_dir is None:
-    #     out_dir = Path(f'{image_dir_name}_aligned')
+    image_dir_name = image_dir.name
+    if out_file is None:
+        out_file = Path(f'{image_dir_name}_measurements.csv')
 
-    # image_extensions = IMAGE_EXTENSIONS
-    # image_files = np.array(
-    #     [f for f in image_dir.glob('*') if f.suffix.lower() in image_extensions]
-    # )
-    # image_names = np.array([f.with_suffix('').name for f in image_files])
-    pass
+    # image_dir and mask_dir provided
+    if not mask_dir is None:
+        image_extensions = IMAGE_EXTENSIONS
+        image_files = np.array(
+            [f for f in image_dir.glob('*') if f.suffix.lower() in image_extensions]
+        )
+        image_names = np.array([f.with_suffix('').name for f in image_files])
+        mask_files = np.array([mask_dir / f'{n}_mask.png' for n in image_names])
+        mask_files_matching = np.array([f.exists() for f in mask_files])
+
+        if mask_files_matching.sum() < 1:
+            sys.stderr.write(f'Could not find any mask in mask_dir ({mask_dir}).\n')
+            sys.exit(1)
+        if len(mask_files_matching) - mask_files_matching.sum() > 0:
+            msg = 'WARNING: Could not find mask files for images\n\t' + '\n\t'.join(
+                sorted(image_names[~mask_files_matching])
+            )
+            print(msg)
+        mask_files = mask_files[mask_files_matching]
+        image_files = image_files[mask_files_matching]
+        groups = np.array(['' for i in range(len(mask_files))])
+    # only image_dir provided -> expecting a align output directory
+    else:
+        print('NOTE: only image_dir provided. Expecting an align output directory...')
+        dirs = [
+            f for f in image_dir.iterdir() if f.is_dir() and not f.name.startswith('.')
+        ]
+        image_files = np.array([])
+        mask_files = np.array([])
+        groups = np.array([])
+        for d in dirs:
+            img_dir = d / 'extractions'
+            mask_dir = d / 'masks'
+
+            cur_img_files = np.array(list(img_dir.glob('*.png')))
+            cur_image_names = np.array([f.with_suffix('').name for f in cur_img_files])
+            cur_mask_files = np.array(
+                [mask_dir / f'{n}_mask.png' for n in cur_image_names]
+            )
+            cur_mask_files_matching = np.array([f.exists() for f in cur_mask_files])
+
+            if cur_mask_files_matching.sum() < 1:
+                sys.stderr.write(f'Could not find any mask in mask_dir ({mask_dir}).\n')
+                sys.exit(1)
+            if len(cur_mask_files_matching) - cur_mask_files_matching.sum() > 0:
+                msg = 'WARNING: Could not find mask files for images\n\t' + '\n\t'.join(
+                    sorted(cur_image_names[~cur_mask_files_matching])
+                )
+                print(msg)
+
+            image_files = np.append(image_files, cur_img_files[cur_mask_files_matching])
+            mask_files = np.append(mask_files, cur_mask_files[cur_mask_files_matching])
+            groups = np.append(
+                groups, [d.name for i in range(cur_mask_files_matching.sum())]
+            )
+    # prepare arguments for parallel processing
+    symmetric = True
+    normed = True
+    args_list = [
+        (
+            image_file,
+            mask_file,
+            n_colors,
+            symmetric,
+            normed,
+            distances,
+            angles,
+            resize_width,
+            resize_height,
+        )
+        for image_file, mask_file in zip(image_files, mask_files)
+    ]
+
+    # parallel runs
+    import multiprocessing
+    import pandas as pd
+    from tqdm import tqdm
+
+    with multiprocessing.Pool(processes=n_proc) as pool:
+        measurements = pd.concat(
+            tqdm(
+                pool.imap_unordered(single_wrapped, args_list),
+                total=len(image_files),
+            )
+        )
+
+    measurements['group'] = groups
+    measurements.insert(3, 'group', measurements.pop('group'))
+
+    measurements.to_csv(out_file, index=False)
 
 
 @group(

@@ -14,7 +14,10 @@ from cloup import (
 
 
 def run_single(
-    image_file: Path, mask_file: Path, out_dir: Optional[Path], padding: int,
+    image_file: Path,
+    mask_file: Path,
+    out_dir: Optional[Path],
+    padding: int,
 ):
     image_name = image_file.with_suffix('').name
     if out_dir is None:
@@ -70,7 +73,12 @@ def run_single(
         rots.append(np.arctan2(rotation.T[0, 0], rotation.T[1, 0]) * 180 / np.pi)
         contour_rot = contour.dot(rotation.T)
         contour_rot = np.r_[
-            contour_rot[best_i:,], contour_rot[:best_i,],
+            contour_rot[
+                best_i:,
+            ],
+            contour_rot[
+                :best_i,
+            ],
         ]
         contours_rot.append(contour_rot)
 
@@ -93,10 +101,10 @@ def run_single(
             remove_background=True,
         )
 
-        out_file_image = out_dir_extractions / f'{image_name}_bbox{i}.png'
+        out_file_image = out_dir_extractions / f'{image_name}_{i}.png'
         cv2.imwrite(str(out_file_image), sub_image_rot * 255)
 
-        out_file_mask = out_dir_masks / f'{image_name}_mask{i}.png'
+        out_file_mask = out_dir_masks / f'{image_name}_{i}_mask.png'
         cv2.imwrite(str(out_file_mask), sub_mask_rot * 255)
 
 
@@ -165,10 +173,16 @@ def single_wrapped(args):
 )
 @help_option('-h', '--help')
 def single(
-    image_file: Path, mask_file: Path, out_dir: Optional[Path], padding: int,
+    image_file: Path,
+    mask_file: Path,
+    out_dir: Optional[Path],
+    padding: int,
 ):
     run_single(
-        image_file=image_file, mask_file=mask_file, out_dir=out_dir, padding=padding,
+        image_file=image_file,
+        mask_file=mask_file,
+        out_dir=out_dir,
+        padding=padding,
     )
 
 
@@ -243,10 +257,15 @@ def single(
         Number of parallel processes to run. Should not be set higher than
         the number of CPU cores.
     ''',
+    show_default=True,
 )
 @help_option('-h', '--help')
 def multi(
-    image_dir: Path, mask_dir: Path, out_dir: Optional[Path], padding: int, n_proc: int,
+    image_dir: Path,
+    mask_dir: Path,
+    out_dir: Optional[Path],
+    padding: int,
+    n_proc: int,
 ):
     import numpy as np
     from ..defaults import IMAGE_EXTENSIONS
@@ -263,10 +282,7 @@ def multi(
 
     # check if mask_dir is detection dir
     dir_content = [f.name for f in mask_dir.iterdir()]
-    dirs_matching = np.zeros((len(image_names)), dtype=bool)
-    for i, image_name in enumerate(image_names):
-        if image_name in dir_content:
-            dirs_matching[i] = True
+    dirs_matching = np.array([(n in dir_content) for n in image_names])
     # mask_dir is detection output
     if dirs_matching.sum() > 0:
         msg = (
@@ -299,10 +315,7 @@ def multi(
         mask_files = np.array(
             [mask_dir / f'{image_name}_mask.png' for image_name in image_names]
         )
-        mask_files_matching = np.zeros(len(image_names), dtype=bool)
-        for i, mask_file in enumerate(mask_files):
-            if mask_file.exists():
-                mask_files_matching[i] = True
+        mask_files_matching = np.array([f.exists() for f in mask_files])
         if mask_files_matching.sum() < 1:
             sys.stderr.write(f'Could not find any mask in mask_dir ({mask_dir}).\n')
             sys.exit(1)
@@ -333,7 +346,8 @@ def multi(
     with multiprocessing.Pool(processes=n_proc) as pool:
         list(
             tqdm(
-                pool.imap_unordered(single_wrapped, args_list), total=len(image_files),
+                pool.imap_unordered(single_wrapped, args_list),
+                total=len(image_files),
             )
         )
 
