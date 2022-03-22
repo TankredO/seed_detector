@@ -187,37 +187,6 @@ def run_single(
     is_flag=True,
     help='EXPERIMENTAL: use adaptive segmentation algorithm',
 )
-# @option(
-#     '-r',
-#     '--refine',
-#     type=bool,
-#     is_flag=True,
-#     help='''
-#         Use CascadePSP for segmentation refinement.
-#     ''',
-# )
-# @option(
-#     '-d',
-#     '--refinement_device',
-#     type=str,
-#     default='cuda:0',
-#     show_default=True,
-#     help='''
-#         Refinement device for CascadePSP. Only relevant if -r/--refine is set.
-#         Either "cuda:0", or "cuda:1", ..., to use a CUDA device, or alternatively
-#         "cpu" to use the CPU. NOTE: Running CascadePSP using the CPU is very slow.
-#     ''',
-# )
-# @option(
-#     '-c',
-#     '--refinement_cycles',
-#     type=int,
-#     default=1,
-#     show_default=True,
-#     help='''
-#         Number of refinement cycles.
-#     ''',
-# )
 @option_group(
     'Output options',
     option(
