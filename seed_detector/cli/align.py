@@ -1,3 +1,4 @@
+from re import sub
 import sys
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
@@ -26,6 +27,7 @@ def run_single(
     import numpy as np
     import cv2
     import skimage.transform
+    import skimage.morphology
     import pyefd
     from ..defaults import DEFAULT_N_POLYGON_VERTICES
     from ..tools import (
@@ -90,10 +92,17 @@ def run_single(
 
     for i, (contour, angle) in enumerate(zip(contours, rots)):
         sub_image, sub_mask, *_ = extract_subimage(contour, image)
-        sub_mask_rot = skimage.transform.rotate(sub_mask, angle, resize=True, order=0)
+
         sub_image_rot = skimage.transform.rotate(sub_image, angle, resize=True, order=1)
 
-        contour = resample_polygon(get_contours(sub_mask_rot, 1)[0], n_vertices)
+        sub_mask_rot = skimage.transform.rotate(sub_mask, angle, resize=True, order=0)
+        sub_mask_rot = skimage.morphology.binary_dilation(sub_mask_rot)
+        sub_mask_rot = skimage.morphology.binary_erosion(sub_mask_rot)
+        sub_mask_contours = sorted(
+            get_contours(sub_mask_rot, 1), key=lambda x: x.shape[0], reverse=True
+        )
+        contour = resample_polygon(sub_mask_contours[0], n_vertices)
+
         sub_image_rot, sub_mask_rot, *_ = extract_subimage(
             contour,
             sub_image_rot,
@@ -106,6 +115,12 @@ def run_single(
 
         out_file_mask = out_dir_masks / f'{image_name}_{i}_mask.png'
         cv2.imwrite(str(out_file_mask), sub_mask_rot * 255)
+
+        if len(sub_mask_contours) > 1:
+            print(
+                'WARNING: found multiple contours in aligned mask. '
+                f'Please check {out_file_mask} and {out_file_image}.'
+            )
 
 
 def single_wrapped(args):

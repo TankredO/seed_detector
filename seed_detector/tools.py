@@ -374,7 +374,7 @@ def align_shapes(a: np.ndarray, b: np.ndarray):
 def primary_colors(
     image: np.ndarray, mask: Optional[np.ndarray] = None, n_colors: int = 5
 ):
-    km = sklearn.cluster.KMeans(n_clusters=n_colors)
+    km = sklearn.cluster.KMeans(n_clusters=n_colors, n_init=3)
 
     if not mask is None:
         pixel_values = image[mask != 0].reshape((-1, image.shape[2]))

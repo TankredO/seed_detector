@@ -49,8 +49,11 @@ def run_single(
     # get contours from mask
     n_vertices = DEFAULT_N_POLYGON_VERTICES
     min_size = 1  # we assume only perfect masks
-    contour = get_contours(mask, min_size=min_size)[0]
-    contour = resample_polygon(contour, n_points=n_vertices)
+    try:
+        contour = get_contours(mask, min_size=min_size)[0]
+        contour = resample_polygon(contour, n_points=n_vertices)
+    except:
+        print(f'WARNING: no contour found in {mask_file}')
 
     # == shape
     props = skimage.measure.regionprops(mask)[0]
@@ -197,7 +200,7 @@ def run_single(
 
 
 def single_wrapped(args):
-    return run_single(*args)
+    return run_single(*args[0:-1]), args[-1]
 
 
 @command('single', help='Calculate measurements for a single image-mask pair.')
@@ -235,7 +238,7 @@ def single_wrapped(args):
         '-o',
         '--out_file',
         type=PathType(
-            file_okay=False, dir_okay=True, resolve_path=True, path_type=Path
+            file_okay=True, dir_okay=False, resolve_path=True, path_type=Path
         ),
         help=f'''
             Output (CSV) file. Will be created if it does not exist. By default
@@ -296,6 +299,10 @@ def single_wrapped(args):
         ''',
     ),
 )
+@option_group(
+    'Output options',
+    option('-g', '--group', type=str, default='', help='Group name for measurements.'),
+)
 @help_option('-h', '--help')
 def single(
     image_file: Path,
@@ -306,6 +313,7 @@ def single(
     angles: List[int],
     resize_width: Optional[int],
     resize_height: Optional[int],
+    group: str,
 ):
     image_name = image_file.with_suffix('').name
     if out_file is None:
@@ -320,6 +328,9 @@ def single(
         resize_width=resize_width,
         resize_height=resize_height,
     )
+    measurements['group'] = group
+    measurements.insert(3, 'group', measurements.pop('group'))
+    measurements.to_csv(out_file, index=False, mode='a', header=not out_file.exists())
     measurements.to_csv(out_file, index=False)
 
 
@@ -525,8 +536,9 @@ def multi(
             angles,
             resize_width,
             resize_height,
+            group,  # need to pass groups since we are using imap_unordered for parallel processing
         )
-        for image_file, mask_file in zip(image_files, mask_files)
+        for image_file, mask_file, group in zip(image_files, mask_files, groups)
     ]
 
     # parallel runs
@@ -535,17 +547,18 @@ def multi(
     from tqdm import tqdm
 
     with multiprocessing.Pool(processes=n_proc) as pool:
-        measurements = pd.concat(
-            tqdm(
-                pool.imap_unordered(single_wrapped, args_list),
-                total=len(image_files),
+        if out_file.exists():
+            out_file.unlink()
+
+        for measurements, group in tqdm(
+            pool.imap_unordered(single_wrapped, args_list),
+            total=len(image_files),
+        ):
+            measurements['group'] = group
+            measurements.insert(3, 'group', measurements.pop('group'))
+            measurements.to_csv(
+                out_file, index=False, mode='a', header=not out_file.exists()
             )
-        )
-
-    measurements['group'] = groups
-    measurements.insert(3, 'group', measurements.pop('group'))
-
-    measurements.to_csv(out_file, index=False)
 
 
 @group(
@@ -556,6 +569,10 @@ def multi(
 @help_option('-h', '--help')
 def measure():
     pass
+
+
+def profile():
+    run_single
 
 
 measure.add_command(single)
