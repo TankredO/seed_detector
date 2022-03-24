@@ -94,19 +94,19 @@ def run_single(
         return pc_dict
 
     # dominant color (RGB)
-    colors_rgb, counts_rgb = primary_colors(image, mask, n_colors)
+    colors_rgb, counts_rgb = primary_colors(image[:, :, [2, 1, 0]], mask, n_colors)
     colors_rgb = np.round(colors_rgb, 0).astype(np.uint8)
     frac_rgb = counts_rgb / counts_rgb.sum()
     colors_rgb_dict = build_pc_dict(colors_rgb, frac_rgb, 'rgb', ('r', 'g', 'b'))
 
     # dominant color (HSV)
-    image_hsv = skimage.color.rgb2hsv(image)
+    image_hsv = skimage.color.rgb2hsv(image[:, :, [2, 1, 0]])
     colors_hsv, counts_hsv = primary_colors(image_hsv, mask, n_colors)
     frac_hsv = counts_hsv / counts_hsv.sum()
     colors_hsv_dict = build_pc_dict(colors_hsv, frac_hsv, 'hsv', ('h', 's', 'v'))
 
     # dominant color (Lab)
-    image_lab = skimage.color.rgb2lab(image)
+    image_lab = skimage.color.rgb2lab(image[:, :, [2, 1, 0]])
     colors_lab, counts_lab = primary_colors(image_lab, mask, n_colors)
     frac_lab = counts_lab / counts_lab.sum()
     colors_lab_dict = build_pc_dict(colors_lab, frac_lab, 'lab', ('l', 'a', 'b'))
@@ -138,7 +138,7 @@ def run_single(
     mask_resized = resize_image(mask, height=resize_height, width=resize_width, order=0)
 
     # texture gray image
-    image_gray = skimage.color.rgb2gray(image)
+    image_gray = skimage.color.rgb2gray(image[:, :, [2, 1, 0]])
     image_gray = (
         resize_image(image_gray, height=resize_height, width=resize_width) * 255
     ).astype(np.uint8)
@@ -158,7 +158,7 @@ def run_single(
     glcm_gray_dict = build_texture_dict(glcm_gray_props, distances, angles, 'gray')
 
     # texture L* (Lab color space)
-    image_l = skimage.color.rgb2lab(image)[:, :, 0]
+    image_l = skimage.color.rgb2lab(image[:, :, [2, 1, 0]])[:, :, 0]
     image_l = np.round(
         resize_image(image_l, height=resize_height, width=resize_width)
     ).astype(np.uint8)
