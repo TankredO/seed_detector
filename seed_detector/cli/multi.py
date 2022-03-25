@@ -151,6 +151,7 @@ def multi(
     with multiprocessing.Pool(processes=n_proc) as pool:
         list(
             tqdm(
-                pool.imap_unordered(single_wrapped, args_list), total=len(image_files),
+                pool.imap_unordered(single_wrapped, args_list),
+                total=len(image_files),
             )
         )

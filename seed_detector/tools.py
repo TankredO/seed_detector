@@ -79,7 +79,7 @@ def segment_image2(
         bg_labels = np.argsort(counts)[::-1][:n_bg_clusters]
     # find cluster closest to background color
     else:
-        bg_col = skimage.color.rgb2lab(np.array(bg_col))
+        bg_col = skimage.color.rgb2lab(np.array(bg_col))[[1, 2]]
         centers = np.uint8(centers)
         distances = np.sqrt(np.sum((bg_col - centers) ** 2, axis=1))
 
