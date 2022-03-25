@@ -571,9 +571,5 @@ def measure():
     pass
 
 
-def profile():
-    run_single
-
-
 measure.add_command(single)
 measure.add_command(multi)
