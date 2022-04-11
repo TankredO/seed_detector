@@ -101,6 +101,13 @@ def run_single(
         sub_mask_contours = sorted(
             get_contours(sub_mask_rot, 1), key=lambda x: x.shape[0], reverse=True
         )
+        if len(sub_mask_contours) < 1:
+            print(
+                'WARNING: contour could not be found after alignment. '
+                f'Please check {mask_file} and {image_file}.'
+            )
+            continue
+
         contour = resample_polygon(sub_mask_contours[0], n_vertices)
 
         sub_image_rot, sub_mask_rot, *_ = extract_subimage(

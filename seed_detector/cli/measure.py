@@ -72,44 +72,44 @@ def run_single(
 
     diaspore_surface_structure = chull_perimeter / perimeter
 
-    # == dominant colors
-    def build_pc_dict(
-        colors,
-        counts,
-        prefix,
-        col_comp_names,
-    ):
-        if np.issubdtype(counts[0], int):
-            suffix = 'count'
-        else:
-            suffix = 'frac'
+    # # == dominant colors
+    # def build_pc_dict(
+    #     colors,
+    #     counts,
+    #     prefix,
+    #     col_comp_names,
+    # ):
+    #     if np.issubdtype(counts[0], int):
+    #         suffix = 'count'
+    #     else:
+    #         suffix = 'frac'
 
-        pc_dict = {}
-        for i, col in enumerate(colors):
-            for val, c in zip(col, col_comp_names):
-                pc_dict[f'{prefix}_{i}_{c}'] = val
-        for i, count in enumerate(counts):
-            pc_dict[f'{prefix}_{i}_{suffix}'] = count
+    #     pc_dict = {}
+    #     for i, col in enumerate(colors):
+    #         for val, c in zip(col, col_comp_names):
+    #             pc_dict[f'{prefix}_{i}_{c}'] = val
+    #     for i, count in enumerate(counts):
+    #         pc_dict[f'{prefix}_{i}_{suffix}'] = count
 
-        return pc_dict
+    #     return pc_dict
 
-    # dominant color (RGB)
-    colors_rgb, counts_rgb = primary_colors(image[:, :, [2, 1, 0]], mask, n_colors)
-    colors_rgb = np.round(colors_rgb, 0).astype(np.uint8)
-    frac_rgb = counts_rgb / counts_rgb.sum()
-    colors_rgb_dict = build_pc_dict(colors_rgb, frac_rgb, 'rgb', ('r', 'g', 'b'))
+    # # dominant color (RGB)
+    # colors_rgb, counts_rgb = primary_colors(image[:, :, [2, 1, 0]], mask, n_colors)
+    # colors_rgb = np.round(colors_rgb, 0).astype(np.uint8)
+    # frac_rgb = counts_rgb / counts_rgb.sum()
+    # colors_rgb_dict = build_pc_dict(colors_rgb, frac_rgb, 'rgb', ('r', 'g', 'b'))
 
-    # dominant color (HSV)
-    image_hsv = skimage.color.rgb2hsv(image[:, :, [2, 1, 0]])
-    colors_hsv, counts_hsv = primary_colors(image_hsv, mask, n_colors)
-    frac_hsv = counts_hsv / counts_hsv.sum()
-    colors_hsv_dict = build_pc_dict(colors_hsv, frac_hsv, 'hsv', ('h', 's', 'v'))
+    # # dominant color (HSV)
+    # image_hsv = skimage.color.rgb2hsv(image[:, :, [2, 1, 0]])
+    # colors_hsv, counts_hsv = primary_colors(image_hsv, mask, n_colors)
+    # frac_hsv = counts_hsv / counts_hsv.sum()
+    # colors_hsv_dict = build_pc_dict(colors_hsv, frac_hsv, 'hsv', ('h', 's', 'v'))
 
-    # dominant color (Lab)
-    image_lab = skimage.color.rgb2lab(image[:, :, [2, 1, 0]])
-    colors_lab, counts_lab = primary_colors(image_lab, mask, n_colors)
-    frac_lab = counts_lab / counts_lab.sum()
-    colors_lab_dict = build_pc_dict(colors_lab, frac_lab, 'lab', ('l', 'a', 'b'))
+    # # dominant color (Lab)
+    # image_lab = skimage.color.rgb2lab(image[:, :, [2, 1, 0]])
+    # colors_lab, counts_lab = primary_colors(image_lab, mask, n_colors)
+    # frac_lab = counts_lab / counts_lab.sum()
+    # colors_lab_dict = build_pc_dict(colors_lab, frac_lab, 'lab', ('l', 'a', 'b'))
 
     # == Texture
     def build_texture_dict(
@@ -187,9 +187,9 @@ def run_single(
             area=area,
             perimeter=perimeter,
             diaspore_surface_structure=diaspore_surface_structure,
-            **colors_rgb_dict,
-            **colors_hsv_dict,
-            **colors_lab_dict,
+            # **colors_rgb_dict,
+            # **colors_hsv_dict,
+            # **colors_lab_dict,
             **glcm_gray_dict,
             **glcm_l_dict,
         ),
@@ -376,7 +376,7 @@ def single(
         '-o',
         '--out_file',
         type=PathType(
-            file_okay=False, dir_okay=True, resolve_path=True, path_type=Path
+            file_okay=True, dir_okay=False, resolve_path=True, path_type=Path
         ),
         help=f'''
             Output (CSV) file. By default a file with the name "<IMAGE_DIR>_measurements.csv"
