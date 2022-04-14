@@ -111,6 +111,54 @@ def run_single(
     # frac_lab = counts_lab / counts_lab.sum()
     # colors_lab_dict = build_pc_dict(colors_lab, frac_lab, 'lab', ('l', 'a', 'b'))
 
+    # median color (RGB)
+    pixel_values_rgb = image[mask != 0][:, [2, 1, 0]]
+    rgb_median = np.median(pixel_values_rgb, 0)
+    rgb_median_dict = {
+        'R_median': rgb_median[0],
+        'G_median': rgb_median[1],
+        'B_median': rgb_median[2],
+    }
+
+    rgb_mean = np.mean(pixel_values_rgb, 0)
+    rgb_mean_dict = {
+        'R_mean': rgb_mean[0],
+        'G_mean': rgb_mean[1],
+        'B_mean': rgb_mean[2],
+    }
+
+    # median color (HSV)
+    pixel_values_hsv = skimage.color.rgb2hsv(pixel_values_rgb)
+    hsv_median = np.median(pixel_values_hsv, 0)
+    hsv_median_dict = {
+        'H_median': hsv_median[0],
+        'S_median': hsv_median[1],
+        'V_median': hsv_median[2],
+    }
+
+    hsv_mean = np.mean(pixel_values_hsv, 0)
+    hsv_mean_dict = {
+        'H_mean': hsv_mean[0],
+        'S_mean': hsv_mean[1],
+        'V_mean': hsv_mean[2],
+    }
+
+    # median color (Lab)
+    pixel_values_lab = skimage.color.rgb2lab(pixel_values_rgb)
+    lab_median = np.median(pixel_values_lab, 0)
+    lab_median_dict = {
+        'L_median': lab_median[0],
+        'a_median': lab_median[1],
+        'b_median': lab_median[2],
+    }
+
+    lab_mean = np.mean(pixel_values_lab, 0)
+    lab_mean_dict = {
+        'L_mean': lab_mean[0],
+        'a_mean': lab_mean[1],
+        'b_mean': lab_mean[2],
+    }
+
     # == Texture
     def build_texture_dict(
         props,
@@ -187,11 +235,17 @@ def run_single(
             area=area,
             perimeter=perimeter,
             diaspore_surface_structure=diaspore_surface_structure,
+            **rgb_median_dict,
+            **rgb_mean_dict,
+            **hsv_median_dict,
+            **hsv_mean_dict,
+            **lab_median_dict,
+            **lab_mean_dict,
             # **colors_rgb_dict,
             # **colors_hsv_dict,
             # **colors_lab_dict,
-            **glcm_gray_dict,
-            **glcm_l_dict,
+            # **glcm_gray_dict,
+            # **glcm_l_dict,
         ),
         index=[image_name],
     )
