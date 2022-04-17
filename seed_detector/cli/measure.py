@@ -103,7 +103,7 @@ def run_single(
     # dominant color (HSV)
     image_hsv = skimage.color.rgb2hsv(image[:, :, [2, 1, 0]])
     # colors_hsv, counts_hsv = primary_colors(image_hsv, mask, n_colors)
-    cl_hsv = median_cut(image=image[:, :, [2, 1, 0]], mask=mask, depth=2)
+    cl_hsv = median_cut(image=image_hsv, mask=mask, depth=2)
     colors_hsv, counts_hsv = dominant_colors_mc(image, cl_hsv)
     frac_hsv = counts_hsv / counts_hsv.sum()
     colors_hsv_dict = build_pc_dict(colors_hsv, frac_hsv, 'hsv', ('h', 's', 'v'))
@@ -187,40 +187,40 @@ def run_single(
 
     mask_resized = resize_image(mask, height=resize_height, width=resize_width, order=0)
 
-    # texture gray image
-    image_gray = skimage.color.rgb2gray(image[:, :, [2, 1, 0]])
-    image_gray = (
-        resize_image(image_gray, height=resize_height, width=resize_width) * 255
-    ).astype(np.uint8)
-    image_gray[mask_resized == 0] = 0
+    # # texture gray image
+    # image_gray = skimage.color.rgb2gray(image[:, :, [2, 1, 0]])
+    # image_gray = (
+    #     resize_image(image_gray, height=resize_height, width=resize_width) * 255
+    # ).astype(np.uint8)
+    # image_gray[mask_resized == 0] = 0
 
-    glcm_gray = skimage.feature.graycomatrix(
-        image_gray,
-        distances=distances,
-        angles=angles,
-        symmetric=symmetric,
-        normed=normed,
-    )
-    glcm_gray_props = {
-        p_name: skimage.feature.graycoprops(glcm_gray, prop=p_name)
-        for p_name in p_names
-    }
-    glcm_gray_dict = build_texture_dict(glcm_gray_props, distances, angles, 'gray')
+    # glcm_gray = skimage.feature.graycomatrix(
+    #     image_gray,
+    #     distances=distances,
+    #     angles=angles,
+    #     symmetric=symmetric,
+    #     normed=normed,
+    # )
+    # glcm_gray_props = {
+    #     p_name: skimage.feature.graycoprops(glcm_gray, prop=p_name)
+    #     for p_name in p_names
+    # }
+    # glcm_gray_dict = build_texture_dict(glcm_gray_props, distances, angles, 'gray')
 
-    # texture L* (Lab color space)
-    image_l = skimage.color.rgb2lab(image[:, :, [2, 1, 0]])[:, :, 0]
-    image_l = np.round(
-        resize_image(image_l, height=resize_height, width=resize_width)
-    ).astype(np.uint8)
-    image_l[mask_resized == 0] = 0
+    # # texture L* (Lab color space)
+    # image_l = skimage.color.rgb2lab(image[:, :, [2, 1, 0]])[:, :, 0]
+    # image_l = np.round(
+    #     resize_image(image_l, height=resize_height, width=resize_width)
+    # ).astype(np.uint8)
+    # image_l[mask_resized == 0] = 0
 
-    glcm_l = skimage.feature.graycomatrix(
-        image_l, distances=distances, angles=angles, symmetric=symmetric, normed=normed,
-    )
-    glcm_l_props = {
-        p_name: skimage.feature.graycoprops(glcm_l, prop=p_name) for p_name in p_names
-    }
-    glcm_l_dict = build_texture_dict(glcm_l_props, distances, angles, 'L')
+    # glcm_l = skimage.feature.graycomatrix(
+    #     image_l, distances=distances, angles=angles, symmetric=symmetric, normed=normed,
+    # )
+    # glcm_l_props = {
+    #     p_name: skimage.feature.graycoprops(glcm_l, prop=p_name) for p_name in p_names
+    # }
+    # glcm_l_dict = build_texture_dict(glcm_l_props, distances, angles, 'L')
 
     measurements = pd.DataFrame(
         dict(
