@@ -81,6 +81,7 @@ def run_single(
         )
 
         contours = get_contours(bin_image=bin_image, min_size=min_size)
+
         n_vertices = (
             DEFAULT_N_POLYGON_VERTICES  # number of vertices to resample contours to
         )
@@ -136,6 +137,12 @@ def run_single(
     if len(w) > 0:
         warnings_str = ", ".join([str(_w.message) for _w in w])
         warnings.warn(f'{image_file.name}: {warnings_str}')
+
+    n_contours = len(contours)
+    if n_contours > 1000:
+        print(
+            f'WARNING: Found a high number of contours ({n_contours}). Please check {out_dir}.'
+        )
 
 
 @command('single', help='Detect seeds in a single image.')

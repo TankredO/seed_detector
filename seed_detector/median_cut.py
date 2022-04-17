@@ -51,11 +51,14 @@ def median_cut(
 
 def dominant_colors_mc(image: np.ndarray, cluster_membership: np.ndarray):
     colors = []
+    counts = []
     for cl in np.unique(cluster_membership):
         if cl == 0:
             continue
-        colors.append(image[cluster_membership == cl].mean(0))
-    return np.array(colors)
+        idcs = cluster_membership == cl
+        colors.append(image[idcs].mean(0))
+        counts.append(np.sum(idcs))
+    return np.array(colors), np.array(counts)
 
 
 def dominant_color_image_mc(image: np.ndarray, cluster_membership: np.ndarray):

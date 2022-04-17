@@ -34,6 +34,7 @@ def run_single(
     import skimage.morphology
     import skimage.color
     import skimage.feature
+    import skimage.exposure
     from ..defaults import DEFAULT_N_POLYGON_VERTICES
     from ..tools import (
         get_contours,
@@ -41,6 +42,7 @@ def run_single(
         primary_colors,
         resize_image,
     )
+    from ..median_cut import median_cut, dominant_colors_mc, dominant_color_image_mc
 
     # read in image and mask
     mask = cv2.imread(str(mask_file), cv2.IMREAD_UNCHANGED)
@@ -72,38 +74,39 @@ def run_single(
 
     diaspore_surface_structure = chull_perimeter / perimeter
 
-    # # == dominant colors
-    # def build_pc_dict(
-    #     colors,
-    #     counts,
-    #     prefix,
-    #     col_comp_names,
-    # ):
-    #     if np.issubdtype(counts[0], int):
-    #         suffix = 'count'
-    #     else:
-    #         suffix = 'frac'
+    # == dominant colors
+    def build_pc_dict(
+        colors, counts, prefix, col_comp_names,
+    ):
+        if np.issubdtype(counts[0], int):
+            suffix = 'count'
+        else:
+            suffix = 'frac'
 
-    #     pc_dict = {}
-    #     for i, col in enumerate(colors):
-    #         for val, c in zip(col, col_comp_names):
-    #             pc_dict[f'{prefix}_{i}_{c}'] = val
-    #     for i, count in enumerate(counts):
-    #         pc_dict[f'{prefix}_{i}_{suffix}'] = count
+        pc_dict = {}
+        for i, col in enumerate(colors):
+            for val, c in zip(col, col_comp_names):
+                pc_dict[f'{prefix}_{i}_{c}'] = val
+        for i, count in enumerate(counts):
+            pc_dict[f'{prefix}_{i}_{suffix}'] = count
 
-    #     return pc_dict
+        return pc_dict
 
-    # # dominant color (RGB)
+    # dominant color (RGB)
     # colors_rgb, counts_rgb = primary_colors(image[:, :, [2, 1, 0]], mask, n_colors)
-    # colors_rgb = np.round(colors_rgb, 0).astype(np.uint8)
-    # frac_rgb = counts_rgb / counts_rgb.sum()
-    # colors_rgb_dict = build_pc_dict(colors_rgb, frac_rgb, 'rgb', ('r', 'g', 'b'))
+    cl_rgb = median_cut(image=image[:, :, [2, 1, 0]], mask=mask, depth=2)
+    colors_rgb, counts_rgb = dominant_colors_mc(image, cl_rgb)
+    colors_rgb = np.round(colors_rgb, 0).astype(np.uint8)
+    frac_rgb = counts_rgb / counts_rgb.sum()
+    colors_rgb_dict = build_pc_dict(colors_rgb, frac_rgb, 'rgb', ('r', 'g', 'b'))
 
-    # # dominant color (HSV)
-    # image_hsv = skimage.color.rgb2hsv(image[:, :, [2, 1, 0]])
+    # dominant color (HSV)
+    image_hsv = skimage.color.rgb2hsv(image[:, :, [2, 1, 0]])
     # colors_hsv, counts_hsv = primary_colors(image_hsv, mask, n_colors)
-    # frac_hsv = counts_hsv / counts_hsv.sum()
-    # colors_hsv_dict = build_pc_dict(colors_hsv, frac_hsv, 'hsv', ('h', 's', 'v'))
+    cl_hsv = median_cut(image=image[:, :, [2, 1, 0]], mask=mask, depth=2)
+    colors_hsv, counts_hsv = dominant_colors_mc(image, cl_hsv)
+    frac_hsv = counts_hsv / counts_hsv.sum()
+    colors_hsv_dict = build_pc_dict(colors_hsv, frac_hsv, 'hsv', ('h', 's', 'v'))
 
     # # dominant color (Lab)
     # image_lab = skimage.color.rgb2lab(image[:, :, [2, 1, 0]])
@@ -112,7 +115,9 @@ def run_single(
     # colors_lab_dict = build_pc_dict(colors_lab, frac_lab, 'lab', ('l', 'a', 'b'))
 
     # median color (RGB)
-    pixel_values_rgb = image[mask != 0][:, [2, 1, 0]]
+    pixel_values_rgb = skimage.exposure.adjust_gamma(
+        image[mask != 0][:, [2, 1, 0]], gamma=2.2
+    )
     rgb_median = np.median(pixel_values_rgb, 0)
     rgb_median_dict = {
         'R_median': rgb_median[0],
@@ -161,10 +166,7 @@ def run_single(
 
     # == Texture
     def build_texture_dict(
-        props,
-        distances,
-        angles,
-        prefix,
+        props, distances, angles, prefix,
     ):
         texture_dict = {}
         for p_name, p in props.items():
@@ -213,11 +215,7 @@ def run_single(
     image_l[mask_resized == 0] = 0
 
     glcm_l = skimage.feature.graycomatrix(
-        image_l,
-        distances=distances,
-        angles=angles,
-        symmetric=symmetric,
-        normed=normed,
+        image_l, distances=distances, angles=angles, symmetric=symmetric, normed=normed,
     )
     glcm_l_props = {
         p_name: skimage.feature.graycoprops(glcm_l, prop=p_name) for p_name in p_names
@@ -241,8 +239,8 @@ def run_single(
             **hsv_mean_dict,
             **lab_median_dict,
             **lab_mean_dict,
-            # **colors_rgb_dict,
-            # **colors_hsv_dict,
+            **colors_rgb_dict,
+            **colors_hsv_dict,
             # **colors_lab_dict,
             # **glcm_gray_dict,
             # **glcm_l_dict,
@@ -605,8 +603,7 @@ def multi(
             out_file.unlink()
 
         for measurements, group in tqdm(
-            pool.imap_unordered(single_wrapped, args_list),
-            total=len(image_files),
+            pool.imap_unordered(single_wrapped, args_list), total=len(image_files),
         ):
             measurements['group'] = group
             measurements.insert(3, 'group', measurements.pop('group'))
