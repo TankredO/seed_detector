@@ -76,7 +76,10 @@ def run_single(
 
     # == dominant colors
     def build_pc_dict(
-        colors, counts, prefix, col_comp_names,
+        colors,
+        counts,
+        prefix,
+        col_comp_names,
     ):
         if np.issubdtype(counts[0], int):
             suffix = 'count'
@@ -166,7 +169,10 @@ def run_single(
 
     # == Texture
     def build_texture_dict(
-        props, distances, angles, prefix,
+        props,
+        distances,
+        angles,
+        prefix,
     ):
         texture_dict = {}
         for p_name, p in props.items():
@@ -603,7 +609,8 @@ def multi(
             out_file.unlink()
 
         for measurements, group in tqdm(
-            pool.imap_unordered(single_wrapped, args_list), total=len(image_files),
+            pool.imap_unordered(single_wrapped, args_list),
+            total=len(image_files),
         ):
             measurements['group'] = group
             measurements.insert(3, 'group', measurements.pop('group'))

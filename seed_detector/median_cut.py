@@ -4,7 +4,10 @@ from typing import Optional
 
 
 def _median_cut(
-    image: np.ndarray, depth: int, mask: np.ndarray, idx: int = 1,
+    image: np.ndarray,
+    depth: int,
+    mask: np.ndarray,
+    idx: int = 1,
 ) -> np.ndarray:
     if depth == 0:
         return mask
@@ -33,7 +36,9 @@ def _median_cut(
 
 
 def median_cut(
-    image: np.ndarray, depth: int, mask: Optional[np.ndarray] = None,
+    image: np.ndarray,
+    depth: int,
+    mask: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     if mask is None:
         mask = np.full((image.shape[0], image.shape[1]), fill_value=1, dtype=int)
