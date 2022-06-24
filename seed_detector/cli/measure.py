@@ -98,7 +98,7 @@ def run_single(
     depth = 0
     tmp = n_colors
     while tmp > 1:
-        tmp = tmp / 2
+        tmp = tmp // 2
         depth += 1
 
     cl_rgb = median_cut(image=image[:, :, [2, 1, 0]], mask=mask, depth=depth)
