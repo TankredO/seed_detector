@@ -16,7 +16,7 @@ from cloup import (
 def run_single(
     image_file: Path,
     mask_file: Path,
-    n_colors: int = 5,
+    n_colors: int = 4,
 ):
     image_name = image_file.with_suffix('').name
 
@@ -95,7 +95,13 @@ def run_single(
 
     # dominant color (RGB)
     # colors_rgb, counts_rgb = primary_colors(image[:, :, [2, 1, 0]], mask, n_colors)
-    cl_rgb = median_cut(image=image[:, :, [2, 1, 0]], mask=mask, depth=2)
+    depth = 0
+    tmp = n_colors
+    while tmp > 1:
+        tmp = tmp / 2
+        depth += 1
+
+    cl_rgb = median_cut(image=image[:, :, [2, 1, 0]], mask=mask, depth=depth)
     colors_rgb, counts_rgb = dominant_colors_mc(image, cl_rgb)
     colors_rgb = np.round(colors_rgb, 0).astype(np.uint8)
     frac_rgb = counts_rgb / counts_rgb.sum()
@@ -110,7 +116,7 @@ def run_single(
     colors_hsv_dict = build_pc_dict(colors_hsv, frac_hsv, 'hsv', ('h', 's', 'v'))
 
     # median color (RGB)
-    
+
     # remove outer pixels to reduce color noise (reflected background color)
     kernel = np.ones((5, 5), np.uint8)
     mask2 = cv2.erode(mask, kernel)
@@ -132,6 +138,21 @@ def run_single(
         'B_mean': rgb_mean[2],
     }
 
+    pixel_values_srgb = image[mask2 != 0][:, [2, 1, 0]]
+    srgb_median = np.median(pixel_values_srgb, 0)
+    srgb_median_dict = {
+        'sR_median': srgb_median[0],
+        'sG_median': srgb_median[1],
+        'sB_median': srgb_median[2],
+    }
+
+    srgb_mean = np.mean(pixel_values_srgb, 0)
+    srgb_mean_dict = {
+        'sR_mean': srgb_mean[0],
+        'sG_mean': srgb_mean[1],
+        'sB_mean': srgb_mean[2],
+    }
+
     measurements = pd.DataFrame(
         dict(
             image_name=image_name,
@@ -147,6 +168,8 @@ def run_single(
             circularity=circularity,
             **rgb_median_dict,
             **rgb_mean_dict,
+            **srgb_median_dict,
+            **srgb_mean_dict,
             **colors_rgb_dict,
             **colors_hsv_dict,
         ),
@@ -212,8 +235,8 @@ def single_wrapped(args):
         '-n',
         '--n_colors',
         type=int,
-        default=5,
-        help='Number of dominant colors to ectract.',
+        default=4,
+        help='Number of dominant colors to ectract. Must be a power of 2.',
         show_default=True,
     ),
 )
