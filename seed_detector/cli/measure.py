@@ -17,12 +17,6 @@ def run_single(
     image_file: Path,
     mask_file: Path,
     n_colors: int = 5,
-    symmetric: bool = True,
-    normed: bool = True,
-    distances: Iterable[int] = (3, 5),
-    angles: Iterable[int] = (0, 45, 90),
-    resize_height: Optional[int] = None,
-    resize_width: Optional[int] = None,
 ):
     image_name = image_file.with_suffix('').name
 
@@ -39,8 +33,6 @@ def run_single(
     from ..tools import (
         get_contours,
         resample_polygon,
-        primary_colors,
-        resize_image,
     )
     from ..median_cut import median_cut, dominant_colors_mc, dominant_color_image_mc
 
@@ -62,8 +54,10 @@ def run_single(
 
     bbox = props.bbox
     length = bbox[2] - bbox[0]
-    width = bbox[3] - bbox[1]
-    aspect_ratio = length / width
+    # width = bbox[3] - bbox[1]
+    # length = np.max(np.sum(mask == 255, axis=0))
+    width = np.max(np.sum(mask == 255, axis=1))
+    aspect_ratio = width / length
 
     area = props.area
     perimeter = props.perimeter
@@ -71,8 +65,12 @@ def run_single(
     chull = skimage.morphology.convex_hull_image(mask) * 255
     chull_props = skimage.measure.regionprops(chull)[0]
     chull_perimeter = chull_props.perimeter
+    chull_area = chull_props.area
 
     diaspore_surface_structure = chull_perimeter / perimeter
+    solidity = area / chull_area
+
+    circularity = 4 * np.pi * area / np.power(perimeter, 2)
 
     # == dominant colors
     def build_pc_dict(
@@ -111,15 +109,14 @@ def run_single(
     frac_hsv = counts_hsv / counts_hsv.sum()
     colors_hsv_dict = build_pc_dict(colors_hsv, frac_hsv, 'hsv', ('h', 's', 'v'))
 
-    # # dominant color (Lab)
-    # image_lab = skimage.color.rgb2lab(image[:, :, [2, 1, 0]])
-    # colors_lab, counts_lab = primary_colors(image_lab, mask, n_colors)
-    # frac_lab = counts_lab / counts_lab.sum()
-    # colors_lab_dict = build_pc_dict(colors_lab, frac_lab, 'lab', ('l', 'a', 'b'))
-
     # median color (RGB)
+    
+    # remove outer pixels to reduce color noise (reflected background color)
+    kernel = np.ones((5, 5), np.uint8)
+    mask2 = cv2.erode(mask, kernel)
+
     pixel_values_rgb = skimage.exposure.adjust_gamma(
-        image[mask != 0][:, [2, 1, 0]], gamma=2.2
+        image[mask2 != 0][:, [2, 1, 0]], gamma=2.2
     )
     rgb_median = np.median(pixel_values_rgb, 0)
     rgb_median_dict = {
@@ -135,99 +132,6 @@ def run_single(
         'B_mean': rgb_mean[2],
     }
 
-    # median color (HSV)
-    pixel_values_hsv = skimage.color.rgb2hsv(pixel_values_rgb)
-    hsv_median = np.median(pixel_values_hsv, 0)
-    hsv_median_dict = {
-        'H_median': hsv_median[0],
-        'S_median': hsv_median[1],
-        'V_median': hsv_median[2],
-    }
-
-    hsv_mean = np.mean(pixel_values_hsv, 0)
-    hsv_mean_dict = {
-        'H_mean': hsv_mean[0],
-        'S_mean': hsv_mean[1],
-        'V_mean': hsv_mean[2],
-    }
-
-    # median color (Lab)
-    pixel_values_lab = skimage.color.rgb2lab(pixel_values_rgb)
-    lab_median = np.median(pixel_values_lab, 0)
-    lab_median_dict = {
-        'L_median': lab_median[0],
-        'a_median': lab_median[1],
-        'b_median': lab_median[2],
-    }
-
-    lab_mean = np.mean(pixel_values_lab, 0)
-    lab_mean_dict = {
-        'L_mean': lab_mean[0],
-        'a_mean': lab_mean[1],
-        'b_mean': lab_mean[2],
-    }
-
-    # == Texture
-    def build_texture_dict(
-        props,
-        distances,
-        angles,
-        prefix,
-    ):
-        texture_dict = {}
-        for p_name, p in props.items():
-            for i, d in enumerate(distances):
-                for j, a in enumerate(angles):
-                    texture_dict[f'{prefix}_{p_name}_d{d}_a{a}'] = p[i][j]
-
-        return texture_dict
-
-    p_names = (
-        'contrast',
-        'dissimilarity',
-        'homogeneity',
-        'ASM',
-        'energy',
-        'correlation',
-    )
-
-    mask_resized = resize_image(mask, height=resize_height, width=resize_width, order=0)
-
-    # # texture gray image
-    # image_gray = skimage.color.rgb2gray(image[:, :, [2, 1, 0]])
-    # image_gray = (
-    #     resize_image(image_gray, height=resize_height, width=resize_width) * 255
-    # ).astype(np.uint8)
-    # image_gray[mask_resized == 0] = 0
-
-    # glcm_gray = skimage.feature.graycomatrix(
-    #     image_gray,
-    #     distances=distances,
-    #     angles=angles,
-    #     symmetric=symmetric,
-    #     normed=normed,
-    # )
-    # glcm_gray_props = {
-    #     p_name: skimage.feature.graycoprops(glcm_gray, prop=p_name)
-    #     for p_name in p_names
-    # }
-    # glcm_gray_dict = build_texture_dict(glcm_gray_props, distances, angles, 'gray')
-
-    # # texture L* (Lab color space)
-    # image_l = skimage.color.rgb2lab(image[:, :, [2, 1, 0]])[:, :, 0]
-    # image_l = np.round(
-    #     resize_image(image_l, height=resize_height, width=resize_width)
-    # ).astype(np.uint8)
-    # image_l[mask_resized == 0] = 0
-
-    # glcm_l = skimage.feature.graycomatrix(
-    #     image_l, distances=distances, angles=angles, symmetric=symmetric, normed=normed,
-    # )
-    # glcm_l_props = {
-    #     p_name: skimage.feature.graycoprops(glcm_l, prop=p_name) for p_name in p_names
-    # }
-    # glcm_l_dict = build_texture_dict(glcm_l_props, distances, angles, 'L')
-
     measurements = pd.DataFrame(
         dict(
             image_name=image_name,
@@ -239,17 +143,12 @@ def run_single(
             area=area,
             perimeter=perimeter,
             diaspore_surface_structure=diaspore_surface_structure,
+            solidity=solidity,
+            circularity=circularity,
             **rgb_median_dict,
             **rgb_mean_dict,
-            **hsv_median_dict,
-            **hsv_mean_dict,
-            **lab_median_dict,
-            **lab_mean_dict,
             **colors_rgb_dict,
             **colors_hsv_dict,
-            # **colors_lab_dict,
-            # **glcm_gray_dict,
-            # **glcm_l_dict,
         ),
         index=[image_name],
     )
@@ -367,10 +266,6 @@ def single(
     mask_file: Path,
     out_file: Optional[Path],
     n_colors: int,
-    distances: List[int],
-    angles: List[int],
-    resize_width: Optional[int],
-    resize_height: Optional[int],
     group: str,
 ):
     image_name = image_file.with_suffix('').name
@@ -381,10 +276,6 @@ def single(
         image_file=image_file,
         mask_file=mask_file,
         n_colors=n_colors,
-        distances=distances,
-        angles=angles,
-        resize_width=resize_width,
-        resize_height=resize_height,
     )
     measurements['group'] = group
     measurements.insert(3, 'group', measurements.pop('group'))
@@ -455,47 +346,6 @@ def single(
         show_default=True,
     ),
 )
-@option_group(
-    'Texture options',
-    option(
-        '-d',
-        '--distances',
-        multiple=True,
-        default=(5, 7),
-        help='Distances for gray level co-occurrence matrix calculation.',
-        show_default=True,
-    ),
-    option(
-        '-a',
-        '--angles',
-        multiple=True,
-        default=(0, 45, 90),
-        help='Angles for gray level co-occurrence matrix calculation.',
-        show_default=True,
-    ),
-    option(
-        '-w',
-        '--resize_width',
-        type=int,
-        default=None,
-        help='''
-            Resize images and masks before calculating the gray level co-occurence matrix
-            so that the width is -w/--resize_width while preserving aspect ratio. By default
-            no resizing is applied.
-        ''',
-    ),
-    option(
-        '-h',
-        '--resize_height',
-        type=int,
-        default=None,
-        help='''
-            Resize images and masks before calculating the gray level co-occurence matrix
-            so that the height is -h/--resize_height while preserving aspect ratio. By default
-            no resizing is applied.
-        ''',
-    ),
-)
 @option(
     '-t',
     '--n_proc',
@@ -512,10 +362,6 @@ def multi(
     mask_dir: Optional[Path],
     out_file: Optional[Path],
     n_colors: int,
-    distances: List[int],
-    angles: List[int],
-    resize_width: Optional[int],
-    resize_height: Optional[int],
     n_proc: int,
 ):
     import numpy as np
@@ -581,19 +427,11 @@ def multi(
                 groups, [d.name for i in range(cur_mask_files_matching.sum())]
             )
     # prepare arguments for parallel processing
-    symmetric = True
-    normed = True
     args_list = [
         (
             image_file,
             mask_file,
             n_colors,
-            symmetric,
-            normed,
-            distances,
-            angles,
-            resize_width,
-            resize_height,
             group,  # need to pass groups since we are using imap_unordered for parallel processing
         )
         for image_file, mask_file, group in zip(image_files, mask_files, groups)
