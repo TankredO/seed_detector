@@ -19,12 +19,14 @@ def run_single(
     mask_file: Path,
     out_dir: Optional[Path],
     padding: int,
+    visualize: bool,
 ):
     image_name = image_file.with_suffix('').name
     if out_dir is None:
         out_dir = Path(f'{image_name}_aligned')
 
     import numpy as np
+    import pandas as pd
     import cv2
     import skimage.transform
     import skimage.morphology
@@ -85,49 +87,65 @@ def run_single(
         contours_rot.append(contour_rot)
 
     # extract objects and rotate them
-    out_dir_extractions = out_dir / 'extractions'
-    out_dir_extractions.mkdir(parents=True, exist_ok=True)
-    out_dir_masks = out_dir / 'masks'
-    out_dir_masks.mkdir(parents=True, exist_ok=True)
+    out_dir_contours = out_dir / 'contours'
+    out_dir_contours.mkdir(parents=True, exist_ok=True)
+
+    if visualize:
+        out_dir_extractions = out_dir / 'extractions'
+        out_dir_extractions.mkdir(parents=True, exist_ok=True)
+        out_dir_masks = out_dir / 'masks'
+        out_dir_masks.mkdir(parents=True, exist_ok=True)
 
     for i, (contour, angle) in enumerate(zip(contours, rots)):
-        sub_image, sub_mask, *_ = extract_subimage(contour, image)
-
-        sub_image_rot = skimage.transform.rotate(sub_image, angle, resize=True, order=1)
-
-        sub_mask_rot = skimage.transform.rotate(sub_mask, angle, resize=True, order=0)
-        sub_mask_rot = skimage.morphology.binary_dilation(sub_mask_rot)
-        sub_mask_rot = skimage.morphology.binary_erosion(sub_mask_rot)
-        sub_mask_contours = sorted(
-            get_contours(sub_mask_rot, 1), key=lambda x: x.shape[0], reverse=True
-        )
-        if len(sub_mask_contours) < 1:
-            print(
-                'WARNING: contour could not be found after alignment. '
-                f'Please check {mask_file} and {image_file}.'
-            )
-            continue
-
-        contour = resample_polygon(sub_mask_contours[0], n_vertices)
-
-        sub_image_rot, sub_mask_rot, *_ = extract_subimage(
-            contour,
-            sub_image_rot,
-            padding=(padding, padding, padding, padding),
-            remove_background=True,
+        out_file_contour = out_dir_contours / f'{image_name}_{i}_contour.csv'
+        contour_rot = contours_rot[i]
+        contour_rot = contour_rot - contour_rot.mean(axis=0)
+        pd.DataFrame(contour_rot, columns=['x', 'y']).to_csv(
+            out_file_contour, index=False
         )
 
-        out_file_image = out_dir_extractions / f'{image_name}_{i}.png'
-        cv2.imwrite(str(out_file_image), sub_image_rot * 255)
+        if visualize:
+            sub_image, sub_mask, *_ = extract_subimage(contour, image)
 
-        out_file_mask = out_dir_masks / f'{image_name}_{i}_mask.png'
-        cv2.imwrite(str(out_file_mask), sub_mask_rot * 255)
-
-        if len(sub_mask_contours) > 1:
-            print(
-                'WARNING: found multiple contours in aligned mask. '
-                f'Please check {out_file_mask} and {out_file_image}.'
+            sub_image_rot = skimage.transform.rotate(
+                sub_image, angle, resize=True, order=1
             )
+
+            sub_mask_rot = skimage.transform.rotate(
+                sub_mask, angle, resize=True, order=0
+            )
+            sub_mask_rot = skimage.morphology.binary_dilation(sub_mask_rot)
+            sub_mask_rot = skimage.morphology.binary_erosion(sub_mask_rot)
+            sub_mask_contours = sorted(
+                get_contours(sub_mask_rot, 1), key=lambda x: x.shape[0], reverse=True
+            )
+            if len(sub_mask_contours) < 1:
+                print(
+                    'WARNING: contour could not be found after alignment. '
+                    f'Please check {mask_file} and {image_file}.'
+                )
+                continue
+
+            contour = resample_polygon(sub_mask_contours[0], n_vertices)
+
+            sub_image_rot, sub_mask_rot, *_ = extract_subimage(
+                contour,
+                sub_image_rot,
+                padding=(padding, padding, padding, padding),
+                remove_background=True,
+            )
+
+            out_file_image = out_dir_extractions / f'{image_name}_{i}.png'
+            cv2.imwrite(str(out_file_image), sub_image_rot * 255)
+
+            out_file_mask = out_dir_masks / f'{image_name}_{i}_mask.png'
+            cv2.imwrite(str(out_file_mask), sub_mask_rot * 255)
+
+            if len(sub_mask_contours) > 1:
+                print(
+                    'WARNING: found multiple contours in aligned mask. '
+                    f'Please check {out_file_mask} and {out_file_image}.'
+                )
 
 
 def single_wrapped(args):
@@ -135,7 +153,7 @@ def single_wrapped(args):
 
 
 @command(
-    'single', help='Align contours and extract rotated subimages for a single image.'
+    'single', help='Align contours and extract rotated contours for a single image.'
 )
 @option_group(
     'Required options',
@@ -192,6 +210,12 @@ def single_wrapped(args):
         help='Padding around contours.',
         show_default=True,
     ),
+    option(
+        '-v',
+        '--visualize',
+        help='Visualize aligned masks and extracted subimages.',
+        is_flag=True,
+    ),
 )
 @help_option('-h', '--help')
 def single(
@@ -199,17 +223,19 @@ def single(
     mask_file: Path,
     out_dir: Optional[Path],
     padding: int,
+    visualize: bool,
 ):
     run_single(
         image_file=image_file,
         mask_file=mask_file,
         out_dir=out_dir,
         padding=padding,
+        visualize=visualize,
     )
 
 
 @command(
-    'multi', help='Align contours and extract rotated subimages for multiple images.'
+    'multi', help='Align contours and extract rotated contours for multiple images.'
 )
 @option_group(
     'Required options',
@@ -270,6 +296,12 @@ def single(
         help='Padding around contours.',
         show_default=True,
     ),
+    option(
+        '-v',
+        '--visualize',
+        help='Visualize aligned masks and extracted subimages.',
+        is_flag=True,
+    ),
 )
 @option(
     '-t',
@@ -288,6 +320,7 @@ def multi(
     out_dir: Optional[Path],
     padding: int,
     n_proc: int,
+    visualize: bool,
 ):
     import numpy as np
     from ..defaults import IMAGE_EXTENSIONS
@@ -356,6 +389,7 @@ def multi(
             mask_file,
             out_dir.joinpath(image_file.with_suffix('').name),
             padding,
+            visualize,
         )
         for image_file, mask_file in zip(image_files, mask_files)
     ]
